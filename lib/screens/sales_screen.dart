@@ -1,0 +1,542 @@
+import 'package:ejemploia/services/firestore_service.dart';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
+// Core
+import '../core/app_state.dart';
+
+// Models
+import '../models/product.dart';
+import '../models/customer.dart';
+import '../models/sale.dart';
+import '../models/sale_item.dart';
+
+// Widgets
+import '../widgets/barcode_scanner_widget.dart';
+
+class SalesScreen extends StatefulWidget {
+  final VoidCallback onUpdate;
+
+  const SalesScreen({super.key, required this.onUpdate});
+
+  @override
+  State<SalesScreen> createState() => _SalesScreenState();
+}
+
+class _SalesScreenState extends State<SalesScreen> {
+  List<SaleItem> cart = [];
+  Customer? selectedCustomer;
+
+  final TextEditingController _searchController = TextEditingController();
+  final FirestoreService _firestoreService = FirestoreService();
+
+  // 🔹 Agregar producto al carrito CORREGIDO
+  void _addItem(Product p) {
+    final index = cart.indexWhere((x) => x.product.id == p.id);
+
+    if (p.isByWeight) {
+      final ctrl = TextEditingController();
+
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('Ingresar peso: ${p.name}'),
+          content: TextField(
+            controller: ctrl,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              suffixText: 'kg',
+              hintText: '0.00',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final w = double.tryParse(ctrl.text);
+                if (w != null && w > 0) {
+                  setState(() {
+                    if (index >= 0) {
+                      // 🟢 Si ya existe, sumamos peso y actualizamos el objeto completo
+                      final nuevaCant = cart[index].quantity + w;
+                      cart[index] = SaleItem(
+                        product: p,
+                        quantity: nuevaCant,
+                        total: p.price * nuevaCant,
+                      );
+                    } else {
+                      // 🟢 Si es nuevo, multiplicamos peso por precio
+                      cart.add(
+                        SaleItem(product: p, quantity: w, total: p.price * w),
+                      );
+                    }
+                    _searchController.clear();
+                  });
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('Añadir'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      // 🍎 Lógica para productos por PIEZA
+      setState(() {
+        if (index >= 0) {
+          // 🟢 Incrementamos cantidad y recalculamos total
+          final nuevaCant = cart[index].quantity + 1;
+          cart[index] = SaleItem(
+            product: p,
+            quantity: nuevaCant,
+            total: p.price * nuevaCant,
+          );
+        } else {
+          // 🟢 Agregamos nuevo con total inicial del precio
+          cart.add(SaleItem(product: p, quantity: 1, total: p.price));
+        }
+        _searchController.clear();
+      });
+    }
+  }
+
+  // 🔹 Quitar producto
+  void _removeItem(int index) {
+    setState(() {
+      if (cart[index].product.isByWeight) {
+        cart.removeAt(index);
+      } else {
+        if (cart[index].quantity > 1) {
+          cart[index].quantity--;
+        } else {
+          cart.removeAt(index);
+        }
+      }
+    });
+  }
+
+  // 🔹 Escanear código
+  void _scanBarcode() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (ctx) => BarcodeScannerWidget(
+          onDetect: (code) {
+            final p = AppState.inventory.where((x) => x.id == code).firstOrNull;
+
+            if (p != null) {
+              _addItem(p);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Producto $code no encontrado')),
+              );
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  // 🔹 Snackbar bonito
+  void _showMessage(String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white),
+            const SizedBox(width: 10),
+            Text(message, style: const TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currency = NumberFormat.simpleCurrency(locale: 'es_MX');
+    final total = cart.fold(0.0, (s, it) => s + it.total);
+    final TextEditingController _customerController = TextEditingController();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'PUNTO DE VENTA',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 2,
+          ),
+        ),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFFE65100), Color(0xFFFF9800)],
+            ),
+          ),
+        ),
+      ),
+
+      body: Column(
+        children: [
+          // 🔍 BUSCADOR
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 15),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: Autocomplete<Product>(
+                      displayStringForOption: (p) => p.name,
+                      optionsBuilder: (text) {
+                        if (text.text == '') {
+                          return const Iterable<Product>.empty();
+                        }
+                        return AppState.inventory.where(
+                          (p) => p.name.toLowerCase().contains(
+                            text.text.toLowerCase(),
+                          ),
+                        );
+                      },
+                      onSelected: (p) {
+                        _addItem(p);
+                        FocusScope.of(context).unfocus();
+                      },
+                      fieldViewBuilder:
+                          (context, textController, focusNode, _) {
+                            textController.addListener(() {
+                              if (textController.text !=
+                                  _searchController.text) {
+                                _searchController.text = textController.text;
+                              }
+                            });
+
+                            _searchController.addListener(() {
+                              if (textController.text !=
+                                  _searchController.text) {
+                                textController.text = _searchController.text;
+                              }
+                            });
+
+                            return TextField(
+                              controller: textController,
+                              focusNode: focusNode,
+                              decoration: const InputDecoration(
+                                hintText: 'Buscar producto...',
+                                border: InputBorder.none,
+                                icon: Icon(Icons.search, color: Colors.orange),
+                              ),
+                            );
+                          },
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                IconButton.filled(
+                  onPressed: _scanBarcode,
+                  icon: const Icon(Icons.qr_code_scanner),
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    padding: const EdgeInsets.all(15),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // 🛒 LISTA
+          Expanded(
+            child: cart.isEmpty
+                ? const Center(
+                    child: Text(
+                      'Carrito vacío',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: cart.length,
+                    itemBuilder: (ctx, i) {
+                      final item = cart[i];
+
+                      return ListTile(
+                        title: Text(item.product.name),
+                        subtitle: Text(
+                          '${currency.format(item.product.price)} x ${item.quantity}',
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(currency.format(item.total)),
+                            IconButton(
+                              icon: const Icon(Icons.remove),
+                              onPressed: () => _removeItem(i),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.add),
+                              onPressed: () => _addItem(item.product),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+
+          // 🔍 Buscador de cliente PRO (igual que productos)
+          Autocomplete<Customer>(
+            displayStringForOption: (c) => c.name,
+
+            optionsBuilder: (TextEditingValue textEditingValue) {
+              if (textEditingValue.text.isEmpty) {
+                return const Iterable<Customer>.empty();
+              }
+
+              return AppState.customers.where((c) {
+                return c.name.toLowerCase().contains(
+                  textEditingValue.text.toLowerCase(),
+                );
+              });
+            },
+
+            onSelected: (Customer selection) {
+              setState(() {
+                selectedCustomer = selection;
+                _customerController.clear(); // 🔥 limpia input
+              });
+
+              FocusScope.of(context).unfocus();
+            },
+
+            fieldViewBuilder:
+                (context, textController, focusNode, onFieldSubmitted) {
+                  // 🔁 sincronización EXACTA como productos
+                  textController.addListener(() {
+                    if (textController.text != _customerController.text) {
+                      _customerController.text = textController.text;
+                    }
+                  });
+
+                  _customerController.addListener(() {
+                    if (textController.text != _customerController.text) {
+                      textController.text = _customerController.text;
+                    }
+                  });
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                    child: TextField(
+                      controller: textController,
+                      focusNode: focusNode,
+                      decoration: InputDecoration(
+                        hintText: selectedCustomer == null
+                            ? 'Buscar cliente...'
+                            : 'Cliente seleccionado',
+                        prefixIcon: const Icon(Icons.person_search),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+          ),
+
+          const SizedBox(height: 10),
+
+          // 👤 Cliente seleccionado (card visual PRO)
+          if (selectedCustomer != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20.0),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.person, color: Colors.orange),
+                    const SizedBox(width: 10),
+
+                    // Nombre
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            selectedCustomer!.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          Text(
+                            selectedCustomer!.phone,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Saldo
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        const Text('Saldo', style: TextStyle(fontSize: 10)),
+                        Text(
+                          '\$${selectedCustomer!.balance.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            color: selectedCustomer!.balance > 0
+                                ? Colors.red
+                                : Colors.green,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(width: 8),
+
+                    // ❌ Quitar cliente
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        setState(() {
+                          selectedCustomer = null;
+                          _customerController.clear(); // 🔥 limpia también aquí
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          const SizedBox(height: 15),
+
+          // 💳 TOTAL Y BOTONES
+          Container(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                Text(
+                  'TOTAL: ${currency.format(total)}',
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: cart.isEmpty
+                            ? null
+                            : () async {
+                                final sale = Sale(
+                                  id: DateTime.now().millisecondsSinceEpoch
+                                      .toString(),
+                                  items: List.from(cart),
+                                  date: DateTime.now(),
+                                  isPaid: true,
+                                  total: total,
+                                  customerId: selectedCustomer?.id,
+                                );
+
+                                // 🔥 Guardar en Firebase (Ya lo tenías bien)
+                                await _firestoreService.addSale(sale);
+
+                                _showMessage('¡VENTA REALIZADA!', Colors.green);
+
+                                setState(() {
+                                  cart.clear();
+                                  selectedCustomer = null;
+                                });
+
+                                widget.onUpdate();
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('COBRAR'),
+                      ),
+                    ),
+
+                    const SizedBox(width: 10),
+
+                    // 🧾 FIAR (CORREGIDO PARA FIREBASE)
+                    if (selectedCustomer != null)
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: cart.isEmpty
+                              ? null
+                              : () async {
+                                  // 1. Agregamos async
+                                  // 2. Creamos el objeto de la venta fiada
+                                  final sale = Sale(
+                                    id: DateTime.now().millisecondsSinceEpoch
+                                        .toString(),
+                                    items: List.from(cart),
+                                    date: DateTime.now(),
+                                    isPaid: false, // Es deuda
+                                    total: total,
+                                    customerId: selectedCustomer!.id,
+                                  );
+
+                                  // 3. 🔥 GUARDAR EN FIREBASE (Para que salga en el historial)
+                                  await _firestoreService.addSale(sale);
+
+                                  // 4. 🔥 ACTUALIZAR EL ADEUDO DEL CLIENTE EN FIREBASE
+                                  // Esto hará que el saldo suba en la lista de clientes
+                                  selectedCustomer!.balance += total;
+                                  await _firestoreService.updateCustomer(
+                                    selectedCustomer!,
+                                  );
+
+                                  _showMessage(
+                                    'FIADO A ${selectedCustomer!.name.toUpperCase()}',
+                                    Colors.orange,
+                                  );
+
+                                  setState(() {
+                                    cart.clear();
+                                    selectedCustomer = null;
+                                  });
+
+                                  widget.onUpdate();
+                                },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('FIAR'),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

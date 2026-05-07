@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "946326167735",
+    "project_id": "fruteriatrejo-ef644",
+    "storage_bucket": "fruteriatrejo-ef644.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:946326167735:android:30494330d02b69903ded32",
+        "android_client_info": {
+          "package_name": "com.example.ejemploia"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBzfcSHZJaGY0P9It2-zVLk8pCIZYy5kbE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

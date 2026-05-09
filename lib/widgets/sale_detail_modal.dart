@@ -1,24 +1,19 @@
+import 'package:ejemploia/core/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-
-// Core
 import '../core/app_state.dart';
-
-// Models
 import '../models/sale.dart';
 import '../models/customer.dart';
-
-// Services
 import '../services/firestore_service.dart';
+// 🔥 1. IMPORTA TU NUEVO HELPER AQUÍ
 
-/// Muestra el detalle de una venta en un modal
+
 void showSaleDetail(
   BuildContext context,
   Sale sale,
   VoidCallback onUpdate,
 ) {
   final currency = NumberFormat.simpleCurrency(locale: 'es_MX');
-  // Instanciamos el servicio de Firebase
   final FirestoreService firestoreService = FirestoreService();
 
   final Customer? customer = AppState.customers
@@ -39,7 +34,6 @@ void showSaleDetail(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // 🔘 Barra superior
             Container(
               width: 40,
               height: 4,
@@ -48,25 +42,17 @@ void showSaleDetail(
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-
             const SizedBox(height: 25),
-
             const Text(
               'Detalle de Ticket',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
-
             const SizedBox(height: 5),
-
             Text(
               DateFormat('dd MMMM yyyy, HH:mm').format(sale.date),
               style: TextStyle(color: Colors.grey[600]),
             ),
 
-            // 👤 Cliente
             if (customer != null) ...[
               const SizedBox(height: 10),
               Container(
@@ -88,11 +74,10 @@ void showSaleDetail(
             const SizedBox(height: 20),
             const Divider(),
 
-            // 🛒 Lista de productos
             if (sale.items.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 20),
-                child: Text('No hay productos para mostrar en este ticket', style: TextStyle(color: Colors.grey)),
+                child: Text('No hay productos', style: TextStyle(color: Colors.grey)),
               )
             else
               ...sale.items.map((item) {
@@ -104,10 +89,7 @@ void showSaleDetail(
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            item.product.name,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
+                          Text(item.product.name, style: const TextStyle(fontWeight: FontWeight.w600)),
                           Text(
                             '${item.quantity.toStringAsFixed(item.product.isByWeight ? 2 : 0)}'
                             '${item.product.isByWeight ? "kg" : "pz"} x '
@@ -116,10 +98,7 @@ void showSaleDetail(
                           ),
                         ],
                       ),
-                      Text(
-                        currency.format(item.total),
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
+                      Text(currency.format(item.total), style: const TextStyle(fontWeight: FontWeight.bold)),
                     ],
                   ),
                 );
@@ -127,14 +106,10 @@ void showSaleDetail(
 
             const Divider(height: 32),
 
-            // 💰 Total
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'TOTAL',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                ),
+                const Text('TOTAL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                 Text(
                   currency.format(sale.total),
                   style: const TextStyle(
@@ -146,24 +121,38 @@ void showSaleDetail(
               ],
             ),
 
-            const SizedBox(height: 30),
+            const SizedBox(height: 20),
 
-            // ✅ Botón pagar
-            if (!sale.isPaid)
+            // 🔥 2. BOTÓN DE WHATSAPP AGREGADO AQUÍ
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => TicketHelper.compartirPDF(sale, customer),
+                icon: const Icon(Icons.share, color: Colors.green),
+                label: const Text(
+                  'COMPARTIR TICKET POR WHATSAPP',
+                  style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.green, width: 2),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                ),
+              ),
+            ),
+
+            if (!sale.isPaid) ...[
+              const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: () async {
-                    // 1. Marcar como pagado en Firebase
                     await firestoreService.markSaleAsPaid(sale.id);
                     sale.isPaid = true;
 
-                    // 2. Descontar el saldo del cliente en Firebase
                     if (customer != null) {
                       customer.balance -= sale.total;
-                      if (customer.balance < 0) {
-                        customer.balance = 0;
-                      }
+                      if (customer.balance < 0) customer.balance = 0;
                       await firestoreService.updateCustomer(customer);
                     }
 
@@ -186,12 +175,11 @@ void showSaleDetail(
                     backgroundColor: Colors.green,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                   ),
                 ),
               ),
+            ],
           ],
         ),
       );

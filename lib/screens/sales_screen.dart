@@ -26,6 +26,7 @@ class SalesScreen extends StatefulWidget {
 class _SalesScreenState extends State<SalesScreen> {
   List<SaleItem> cart = [];
   Customer? selectedCustomer;
+  bool _isProcessing = false;
 
   final TextEditingController _searchController = TextEditingController();
   final FirestoreService _firestoreService = FirestoreService();
@@ -445,14 +446,20 @@ class _SalesScreenState extends State<SalesScreen> {
                 const SizedBox(height: 10),
                 Row(
                   children: [
+                    // 🟢 BOTÓN COBRAR
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: cart.isEmpty
+                        // 🔥 1. CANDADO AQUÍ: Si el carrito está vacío o ESTÁ PROCESANDO, se bloquea (null)
+                        onPressed: (cart.isEmpty || _isProcessing)
                             ? null
                             : () async {
+                                // 🔥 2. PONEMOS EL CANDADO
+                                setState(() {
+                                  _isProcessing = true;
+                                });
+
                                 final sale = Sale(
-                                  id: DateTime.now().millisecondsSinceEpoch
-                                      .toString(),
+                                  id: DateTime.now().millisecondsSinceEpoch.toString(),
                                   items: List.from(cart),
                                   date: DateTime.now(),
                                   isPaid: true,
@@ -460,14 +467,19 @@ class _SalesScreenState extends State<SalesScreen> {
                                   customerId: selectedCustomer?.id,
                                 );
 
-                                // 🔥 Guardar en Firebase (Ya lo tenías bien)
+                                // Guardar en Firebase
                                 await _firestoreService.addSale(sale);
+
+                                // Protección para la pantalla
+                                if (!mounted) return;
 
                                 _showMessage('¡VENTA REALIZADA!', Colors.green);
 
                                 setState(() {
                                   cart.clear();
                                   selectedCustomer = null;
+                                  // 🔥 3. QUITAMOS EL CANDADO
+                                  _isProcessing = false; 
                                 });
 
                                 widget.onUpdate();
@@ -476,24 +488,30 @@ class _SalesScreenState extends State<SalesScreen> {
                           backgroundColor: Colors.green,
                           foregroundColor: Colors.white,
                         ),
-                        child: const Text('COBRAR'),
+                        // 🔥 4. EFECTO VISUAL: Si está procesando, muestra la bolita dando vueltas
+                        child: _isProcessing 
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            : const Text('COBRAR'),
                       ),
                     ),
 
                     const SizedBox(width: 10),
 
-                    // 🧾 FIAR (CORREGIDO PARA FIREBASE)
+                    // 🧾 BOTÓN FIAR
                     if (selectedCustomer != null)
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: cart.isEmpty
+                          // 🔥 1. CANDADO AQUÍ TAMBIÉN
+                          onPressed: (cart.isEmpty || _isProcessing)
                               ? null
                               : () async {
-                                  // 1. Agregamos async
-                                  // 2. Creamos el objeto de la venta fiada
+                                  // 🔥 2. PONEMOS EL CANDADO
+                                  setState(() {
+                                    _isProcessing = true;
+                                  });
+
                                   final sale = Sale(
-                                    id: DateTime.now().millisecondsSinceEpoch
-                                        .toString(),
+                                    id: DateTime.now().millisecondsSinceEpoch.toString(),
                                     items: List.from(cart),
                                     date: DateTime.now(),
                                     isPaid: false, // Es deuda
@@ -501,15 +519,15 @@ class _SalesScreenState extends State<SalesScreen> {
                                     customerId: selectedCustomer!.id,
                                   );
 
-                                  // 3. 🔥 GUARDAR EN FIREBASE (Para que salga en el historial)
+                                  // Guardar en Firebase
                                   await _firestoreService.addSale(sale);
 
-                                  // 4. 🔥 ACTUALIZAR EL ADEUDO DEL CLIENTE EN FIREBASE
-                                  // Esto hará que el saldo suba en la lista de clientes
+                                  // Actualizar adeudo
                                   selectedCustomer!.balance += total;
-                                  await _firestoreService.updateCustomer(
-                                    selectedCustomer!,
-                                  );
+                                  await _firestoreService.updateCustomer(selectedCustomer!);
+
+                                  // Protección para la pantalla
+                                  if (!mounted) return;
 
                                   _showMessage(
                                     'FIADO A ${selectedCustomer!.name.toUpperCase()}',
@@ -519,6 +537,8 @@ class _SalesScreenState extends State<SalesScreen> {
                                   setState(() {
                                     cart.clear();
                                     selectedCustomer = null;
+                                    // 🔥 3. QUITAMOS EL CANDADO
+                                    _isProcessing = false; 
                                   });
 
                                   widget.onUpdate();
@@ -527,7 +547,10 @@ class _SalesScreenState extends State<SalesScreen> {
                             backgroundColor: Colors.orange,
                             foregroundColor: Colors.white,
                           ),
-                          child: const Text('FIAR'),
+                          // 🔥 4. EFECTO VISUAL AQUÍ TAMBIÉN
+                          child: _isProcessing 
+                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : const Text('FIAR'),
                         ),
                       ),
                   ],

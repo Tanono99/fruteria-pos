@@ -1,6 +1,6 @@
 // Agrega este bloque al principio de tu archivo image_1e1359.png
 plugins {
-    id("com.google.gms.google-services") version "4.4.0" apply false
+    id("com.google.gms.google-services") version "4.3.15" apply false
 }
 
 allprojects {

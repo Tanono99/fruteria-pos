@@ -313,7 +313,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
     );
   }
 
-  @override
+  @override 
   Widget build(BuildContext context) {
     
     final currency = NumberFormat.simpleCurrency(locale: 'es_MX');

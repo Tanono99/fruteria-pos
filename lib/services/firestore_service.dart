@@ -82,6 +82,11 @@ class FirestoreService {
     await _db.collection('sales').doc(saleId).update({'isPaid': true});
   }
 
+  // Borrar una venta de la base de datos
+  Future<void> deleteSale(String saleId) async {
+    await _db.collection('sales').doc(saleId).delete();
+  }
+
   Stream<List<Sale>> getTodaySalesStream() {
     DateTime now = DateTime.now();
     DateTime startOfDay = DateTime(now.year, now.month, now.day);

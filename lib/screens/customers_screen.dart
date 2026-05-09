@@ -25,7 +25,6 @@ class CustomersScreen extends StatefulWidget {
 }
 
 class _CustomersScreenState extends State<CustomersScreen> {
-
   // 🔹 Crear o editar cliente
   void _manageCustomer([Customer? c]) {
     final name = TextEditingController(text: c?.name ?? '');
@@ -42,7 +41,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
               controller: name,
               decoration: const InputDecoration(labelText: 'Nombre'),
             ),
-            const SizedBox(height: 20,),
+            const SizedBox(height: 20),
             TextField(
               controller: phone,
               keyboardType: TextInputType.phone,
@@ -52,8 +51,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
           ElevatedButton(
             onPressed: () {
               if (name.text.trim().isEmpty) return;
@@ -77,12 +77,13 @@ class _CustomersScreenState extends State<CustomersScreen> {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
-                      c == null ? 'Cliente agregado' : 'Cliente actualizado'),
+                    c == null ? 'Cliente agregado' : 'Cliente actualizado',
+                  ),
                 ),
               );
             },
             child: const Text('Guardar'),
-          )
+          ),
         ],
       ),
     );
@@ -97,15 +98,16 @@ class _CustomersScreenState extends State<CustomersScreen> {
         content: Text('Eliminar a ${c.name}?'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
           ElevatedButton(
-            onPressed: () async{
+            onPressed: () async {
               await FirebaseFirestore.instance
-              .collection('customers')
-              .doc(c.id)
-              .delete();
-              
+                  .collection('customers')
+                  .doc(c.id)
+                  .delete();
+
               setState(() {
                 AppState.customers.removeWhere((x) => x.id == c.id);
               });
@@ -122,7 +124,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Eliminar'),
-          )
+          ),
         ],
       ),
     );
@@ -140,13 +142,15 @@ class _CustomersScreenState extends State<CustomersScreen> {
         return StreamBuilder<List<Sale>>(
           stream: firestoreService.getSalesByCustomer(c.id),
           builder: (context, snapshot) {
-            
             if (snapshot.hasError) {
               return AlertDialog(
                 title: const Text('Error de conexión'),
                 content: Text('Revisa la consola: ${snapshot.error}'),
                 actions: [
-                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar'))
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cerrar'),
+                  ),
                 ],
               );
             }
@@ -182,7 +186,10 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 child: history.isEmpty
                     ? const Padding(
                         padding: EdgeInsets.all(20),
-                        child: Text('Sin movimientos', textAlign: TextAlign.center),
+                        child: Text(
+                          'Sin movimientos',
+                          textAlign: TextAlign.center,
+                        ),
                       )
                     : ListView.builder(
                         shrinkWrap: true,
@@ -200,12 +207,32 @@ class _CustomersScreenState extends State<CustomersScreen> {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            trailing: Text(currency.format(sale.total)),
-                            onTap: () => showSaleDetail(
-                              context,
-                              sale,
-                              widget.onUpdate,
+                            // 🗑️ Agregamos el precio Y el botón de borrar
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  currency.format(sale.total),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    color: Colors.red,
+                                    size: 20,
+                                  ),
+                                  onPressed: () => _confirmDeleteSale(
+                                    c,
+                                    sale,
+                                  ), // Nueva función de borrado
+                                ),
+                              ],
                             ),
+                            onTap: () =>
+                                showSaleDetail(context, sale, widget.onUpdate),
                           );
                         },
                       ),
@@ -225,12 +252,59 @@ class _CustomersScreenState extends State<CustomersScreen> {
                       foregroundColor: Colors.white,
                     ),
                     child: const Text('Abonar'),
-                  )
+                  ),
               ],
             );
           },
         );
       },
+    );
+  }
+
+  void _confirmDeleteSale(Customer c, Sale sale) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Eliminar venta?'),
+        content: Text(
+          'Esta acción borrará el registro. Si es una deuda de ${sale.total}, el saldo del cliente se ajustará.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CANCELAR'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              final firestoreService = FirestoreService();
+
+              // 1. Si la venta NO estaba pagada (era fiada), le restamos al balance
+              if (!sale.isPaid) {
+                c.balance -= sale.total;
+                await firestoreService.updateCustomer(c);
+              }
+
+              // 2. Borramos la venta de Firebase
+              await firestoreService.deleteSale(sale.id);
+
+              if (!mounted) return;
+              Navigator.pop(ctx); // Cerramos el aviso de confirmación
+
+              // No necesitas cerrar el historial porque el StreamBuilder
+              // detectará el cambio en Firebase y se refrescará solito.
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Venta eliminada'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            },
+            child: const Text('BORRAR', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -251,7 +325,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx), 
+            onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
@@ -259,7 +333,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
               double amount = double.tryParse(ctrl.text) ?? 0;
 
               if (amount > 0) {
-                final navigator = Navigator.of(ctx); 
+                final navigator = Navigator.of(ctx);
                 final scaffold = ScaffoldMessenger.of(context);
 
                 c.balance -= amount;
@@ -283,20 +357,21 @@ class _CustomersScreenState extends State<CustomersScreen> {
                   totalDeudaEnNotas += s.total;
                 }
 
-                double dineroDisponibleParaLiquidar = totalDeudaEnNotas - c.balance;
+                double dineroDisponibleParaLiquidar =
+                    totalDeudaEnNotas - c.balance;
 
                 for (var s in unpaidSales) {
                   if (dineroDisponibleParaLiquidar >= s.total) {
                     await firestoreService.markSaleAsPaid(s.id);
                     dineroDisponibleParaLiquidar -= s.total;
                   } else {
-                    break; 
+                    break;
                   }
                 }
 
                 onDone();
                 navigator.pop();
-                
+
                 scaffold.showSnackBar(
                   const SnackBar(
                     content: Text('Abono registrado y notas liquidadas'),
@@ -307,17 +382,18 @@ class _CustomersScreenState extends State<CustomersScreen> {
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
             child: const Text('Guardar', style: TextStyle(color: Colors.white)),
-          )
+          ),
         ],
       ),
     );
   }
 
-  @override 
+  @override
   Widget build(BuildContext context) {
-    
     final currency = NumberFormat.simpleCurrency(locale: 'es_MX');
-    AppState.customers.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    AppState.customers.sort(
+      (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -327,7 +403,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
             color: Colors.white,
             fontSize: 24,
             fontWeight: FontWeight.bold,
-            letterSpacing: 2
+            letterSpacing: 2,
           ),
         ),
         flexibleSpace: Container(
@@ -347,14 +423,14 @@ class _CustomersScreenState extends State<CustomersScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 15),
               decoration: BoxDecoration(
-                color: Colors.white, 
-                borderRadius: BorderRadius.circular(15), 
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(15),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05), 
-                    blurRadius: 10
-                  )
-                ]
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                  ),
+                ],
               ),
               child: Autocomplete<Customer>(
                 displayStringForOption: (c) => c.name,
@@ -363,32 +439,39 @@ class _CustomersScreenState extends State<CustomersScreen> {
                     return const Iterable<Customer>.empty();
                   }
                   return AppState.customers.where((Customer option) {
-                    return option.name.toLowerCase().contains(textEditingValue.text.toLowerCase()) ||
-                           option.phone.contains(textEditingValue.text);
+                    return option.name.toLowerCase().contains(
+                          textEditingValue.text.toLowerCase(),
+                        ) ||
+                        option.phone.contains(textEditingValue.text);
                   });
                 },
                 onSelected: (Customer selection) {
                   _showHistory(selection); // Abre el historial al seleccionarlo
                   FocusScope.of(context).unfocus();
                 },
-                fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
-                  return TextField(
-                    controller: textController,
-                    focusNode: focusNode,
-                    decoration: InputDecoration(
-                      hintText: 'Buscar por nombre o teléfono...', 
-                      border: InputBorder.none, 
-                      icon: const Icon(Icons.search, color: Colors.orange),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.clear, color: Colors.grey, size: 20),
-                        onPressed: () {
-                          textController.clear();
-                          focusNode.unfocus();
-                        },
-                      ),
-                    ),
-                  );
-                },
+                fieldViewBuilder:
+                    (context, textController, focusNode, onFieldSubmitted) {
+                      return TextField(
+                        controller: textController,
+                        focusNode: focusNode,
+                        decoration: InputDecoration(
+                          hintText: 'Buscar por nombre o teléfono...',
+                          border: InputBorder.none,
+                          icon: const Icon(Icons.search, color: Colors.orange),
+                          suffixIcon: IconButton(
+                            icon: const Icon(
+                              Icons.clear,
+                              color: Colors.grey,
+                              size: 20,
+                            ),
+                            onPressed: () {
+                              textController.clear();
+                              focusNode.unfocus();
+                            },
+                          ),
+                        ),
+                      );
+                    },
               ),
             ),
           ),
@@ -403,15 +486,15 @@ class _CustomersScreenState extends State<CustomersScreen> {
 
                 return Card(
                   child: ListTile(
-                    leading: const CircleAvatar(
-                      child: Icon(Icons.person),
+                    leading: const CircleAvatar(child: Icon(Icons.person)),
+                    title: Text(
+                      c.name,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    title: Text(c.name,
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
                     subtitle: Text(c.phone),
 
                     trailing: Row(
-                      mainAxisSize: MainAxisSize.min, 
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -421,21 +504,31 @@ class _CustomersScreenState extends State<CustomersScreen> {
                             Text(
                               currency.format(c.balance),
                               style: TextStyle(
-                                color: c.balance > 0 ? Colors.red : Colors.green,
+                                color: c.balance > 0
+                                    ? Colors.red
+                                    : Colors.green,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(width: 8), 
-                        
+                        const SizedBox(width: 8),
+
                         IconButton(
-                          icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
+                          icon: const Icon(
+                            Icons.edit,
+                            color: Colors.blue,
+                            size: 20,
+                          ),
                           onPressed: () => _manageCustomer(c),
                         ),
-                        
+
                         IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                          icon: const Icon(
+                            Icons.delete,
+                            color: Colors.red,
+                            size: 20,
+                          ),
                           onPressed: () => _deleteCustomer(c),
                         ),
                       ],
@@ -453,7 +546,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: () => _manageCustomer(),
         backgroundColor: Colors.orange,
-        child: const Icon(Icons.person_add, color: Colors.white,),
+        child: const Icon(Icons.person_add, color: Colors.white),
       ),
     );
   }

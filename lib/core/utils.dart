@@ -1,8 +1,6 @@
-import 'dart:io';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:printing/printing.dart'; // Importante usar esta
 import 'package:intl/intl.dart';
 import '../models/sale.dart';
 import '../models/customer.dart';
@@ -12,9 +10,10 @@ class TicketHelper {
     final pdf = pw.Document();
     final currency = NumberFormat.simpleCurrency(locale: 'es_MX');
 
+    // 1. DIBUJAR EL PDF (Mismo diseño de ticket)
     pdf.addPage(
       pw.Page(
-        pageFormat: PdfPageFormat.roll80, // Formato tipo ticket de 80mm
+        pageFormat: PdfPageFormat.roll80, 
         build: (pw.Context context) {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -29,17 +28,16 @@ class TicketHelper {
               pw.Text("Cliente: ${customer?.name ?? 'Publico General'}"),
               pw.Divider(),
               
-              // Tabla de productos
               pw.Table(
                 children: [
                   pw.TableRow(children: [
                     pw.Text("Prod.", style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                    pw.Text("Cant.", textAlign: pw.TextAlign.right),
-                    pw.Text("Total", textAlign: pw.TextAlign.right),
+                    pw.Text("Cant.", textAlign: pw.TextAlign.right, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    pw.Text("Total", textAlign: pw.TextAlign.right, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
                   ]),
                   ...sale.items.map((item) => pw.TableRow(children: [
                     pw.Text(item.product.name),
-                    pw.Text(item.quantity.toString(), textAlign: pw.TextAlign.right),
+                    pw.Text(item.quantity.toStringAsFixed(1), textAlign: pw.TextAlign.right),
                     pw.Text(currency.format(item.total), textAlign: pw.TextAlign.right),
                   ])),
                 ],
@@ -67,11 +65,14 @@ class TicketHelper {
       ),
     );
 
-    // Guardar temporalmente y compartir
-    final output = await getTemporaryDirectory();
-    final file = File("${output.path}/ticket_${sale.id}.pdf");
-    await file.writeAsBytes(await pdf.save());
+    // 2. COMPARTIR (COMPATIBLE CON WEB)
+    // Convertimos el documento a "bytes" (información pura)
+    final bytes = await pdf.save();
 
-    await Share.shareXFiles([XFile(file.path)], text: 'Ticket de compra - Frutería Trejo');
+    // La librería Printing se encarga de todo dependiendo de si es Web o Celular
+    await Printing.sharePdf(
+      bytes: bytes, 
+      filename: 'ticket_trejo_${sale.id}.pdf'
+    );
   }
 }

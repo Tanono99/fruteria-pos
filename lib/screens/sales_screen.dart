@@ -32,7 +32,7 @@ class _SalesScreenState extends State<SalesScreen> {
   final TextEditingController _searchController = TextEditingController();
   final FirestoreService _firestoreService = FirestoreService();
 
-  // 🔹 Agregar producto al carrito CORREGIDO
+  // 🔹 Agregar producto al carrito CORREGIDO (Separación de memoria para Mayoreo)
   void _addItem(Product p) {
     final index = cart.indexWhere((x) => x.product.id == p.id);
 
@@ -63,17 +63,25 @@ class _SalesScreenState extends State<SalesScreen> {
                 if (w != null && w > 0) {
                   setState(() {
                     if (index >= 0) {
-                      // 🟢 Si ya existe, sumamos peso y actualizamos el objeto completo
-                      final nuevaCant = cart[index].quantity + w;
+                      // 🟢 Si ya existe, mantenemos la instancia que ya estaba en el carrito
+                      // (Así si ya le habías cambiado el precio a mayoreo, no se pierde)
+                      final itemExistente = cart[index];
+                      final nuevaCant = itemExistente.quantity + w;
+                      
                       cart[index] = SaleItem(
-                        product: p,
+                        product: itemExistente.product, // 👈 Mantiene el producto modificado
                         quantity: nuevaCant,
-                        total: p.price * nuevaCant,
+                        total: itemExistente.product.price * nuevaCant,
                       );
                     } else {
-                      // 🟢 Si es nuevo, multiplicamos peso por precio
+                      // 🟢 Si es nuevo, usamos p.copy() para clonarlo e independizarlo
+                      final productoClonado = p.copy();
                       cart.add(
-                        SaleItem(product: p, quantity: w, total: p.price * w),
+                        SaleItem(
+                          product: productoClonado, 
+                          quantity: w, 
+                          total: productoClonado.price * w,
+                        ),
                       );
                     }
                     _searchController.clear();
@@ -90,16 +98,25 @@ class _SalesScreenState extends State<SalesScreen> {
       // 🍎 Lógica para productos por PIEZA
       setState(() {
         if (index >= 0) {
-          // 🟢 Incrementamos cantidad y recalculamos total
-          final nuevaCant = cart[index].quantity + 1;
+          // 🟢 Si ya existe, mantenemos el producto del carrito para respetar su precio de mayoreo
+          final itemExistente = cart[index];
+          final nuevaCant = itemExistente.quantity + 1;
+          
           cart[index] = SaleItem(
-            product: p,
+            product: itemExistente.product, // 👈 Mantiene el producto modificado
             quantity: nuevaCant,
-            total: p.price * nuevaCant,
+            total: itemExistente.product.price * nuevaCant,
           );
         } else {
-          // 🟢 Agregamos nuevo con total inicial del precio
-          cart.add(SaleItem(product: p, quantity: 1, total: p.price));
+          // 🟢 Si es nuevo en el carrito, usamos p.copy() para aislar su precio
+          final productoClonado = p.copy();
+          cart.add(
+            SaleItem(
+              product: productoClonado, 
+              quantity: 1, 
+              total: productoClonado.price,
+            ),
+          );
         }
         _searchController.clear();
       });
@@ -161,69 +178,127 @@ class _SalesScreenState extends State<SalesScreen> {
     );
   }
 
-Future<void> _updateProductPrice(BuildContext context, dynamic item) async {
-  final TextEditingController priceController = 
-      TextEditingController(text: item.product.price.toString());
+  Future<void> _updateProductPrice(BuildContext context, dynamic item) async {
+    final TextEditingController priceController = TextEditingController(
+      text: item.product.price.toString(),
+    );
 
-  return showDialog<void>(
-    context: context,
-    builder: (BuildContext context) {
-      return AlertDialog(
-        title: Text('Editar precio de ${item.product.name}'),
-        content: TextField(
-          controller: priceController,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(
-            labelText: 'Nuevo Precio',
-            prefixText: '\$ ',
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Editar precio de ${item.product.name}'),
+          content: TextField(
+            controller: priceController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              labelText: 'Nuevo Precio',
+              prefixText: '\$ ',
+            ),
           ),
-        ),
-        actions: <Widget>[
-          TextButton(
-            child: const Text('Cancelar'),
-            onPressed: () => Navigator.of(context).pop(),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancelar'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            ElevatedButton(
+              child: const Text('Guardar'),
+              onPressed: () async {
+                double? newPrice = double.tryParse(priceController.text);
+
+                if (newPrice != null && newPrice >= 0) {
+                  try {
+                    // 1. ACTUALIZAR EN TU COLECCIÓN REAL: 'products'
+                    await FirebaseFirestore.instance
+                        .collection('products') // 🟢 Corregido según tu imagen
+                        .doc(
+                          item.product.id.toString().trim(),
+                        ) // Aseguramos que el ID vaya limpio como String (ej: "1")
+                        .update({
+                          'price':
+                              newPrice, // Mapea directo al campo price de tu Firebase
+                        });
+
+                    // 2. ACTUALIZAR LOCALMENTE EN LA PANTALLA
+                    setState(() {
+                      item.product.price = newPrice;
+                    });
+
+                    Navigator.of(context).pop();
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Precio de ${item.product.name} actualizado en Firebase',
+                        ),
+                      ),
+                    );
+                  } catch (e) {
+                    // Esto te imprimirá en la consola de tu computadora el motivo exacto si vuelve a fallar
+                    print("ERROR DETECTADO AL ACTUALIZAR: $e");
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error al guardar: $e')),
+                    );
+                  }
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _applyWholesalePrice(BuildContext context, dynamic item) async {
+    // El control de texto inicia con el precio actual que tiene en el carrito
+    final TextEditingController wholesalePriceController =
+        TextEditingController(text: item.product.price.toString());
+
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Precio especial para ${item.product.name}'),
+          content: TextField(
+            controller: wholesalePriceController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              labelText: 'Precio de Mayoreo (Solo esta venta)',
+              prefixText: '\$ ',
+              helperText: 'No modificará el precio base del inventario.',
+            ),
           ),
-          ElevatedButton(
-            child: const Text('Guardar'),
-            onPressed: () async {
-              double? newPrice = double.tryParse(priceController.text);
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancelar'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+              child: const Text('Aplicar'),
+              onPressed: () {
+                double? newPrice = double.tryParse(
+                  wholesalePriceController.text,
+                );
 
-              if (newPrice != null && newPrice >= 0) {
-                try {
-                  // 1. ACTUALIZAR EN TU COLECCIÓN REAL: 'products'
-                  await FirebaseFirestore.instance
-                      .collection('products') // 🟢 Corregido según tu imagen
-                      .doc(item.product.id.toString().trim()) // Aseguramos que el ID vaya limpio como String (ej: "1")   
-                      .update({
-                        'price': newPrice, // Mapea directo al campo price de tu Firebase
-                      });
-
-                  // 2. ACTUALIZAR LOCALMENTE EN LA PANTALLA
+                if (newPrice != null && newPrice >= 0) {
+                  // 🟢 Actualizamos únicamente el estado en memoria de esta pantalla
                   setState(() {
                     item.product.price = newPrice;
+                    // Si tu clase 'item' no calcula el total automáticamente,
+                    // puedes forzarlo aquí (ej: item.total = newPrice * item.quantity;)
                   });
 
                   Navigator.of(context).pop();
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Precio de ${item.product.name} actualizado en Firebase')),
-                  );
-                } catch (e) {
-                  // Esto te imprimirá en la consola de tu computadora el motivo exacto si vuelve a fallar
-                  print("ERROR DETECTADO AL ACTUALIZAR: $e");
-                  
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error al guardar: $e')),
-                  );
                 }
-              }
-            },
-          ),
-        ],
-      );
-    },
-  );
-}
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -358,6 +433,18 @@ Future<void> _updateProductPrice(BuildContext context, dynamic item) async {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(currency.format(item.total)),
+                            const SizedBox(width: 8), // Espacio sutil
+                            // 🟢 BOTÓN NUEVO: Para aplicar precio de mayoreo / especial en esta venta
+                            IconButton(
+                              icon: const Icon(
+                                Icons.label_outline,
+                                color: Colors.green,
+                              ),
+                              tooltip: 'Precio especial',
+                              onPressed: () =>
+                                  _applyWholesalePrice(context, item),
+                            ),
+
                             IconButton(
                               icon: const Icon(Icons.remove),
                               onPressed: () => _removeItem(i),

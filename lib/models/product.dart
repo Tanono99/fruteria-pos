@@ -13,6 +13,17 @@ class Product {
     this.isByWeight = false,
   });
 
+  // 🟢 AGREGADO: Método para clonar el producto en memoria de forma independiente
+  Product copy() {
+    return Product(
+      id: id,
+      name: name,
+      price: price,
+      stock: stock,
+      isByWeight: isByWeight,
+    );
+  }
+
   /// Convertir objeto a JSON (para guardar)
   Map<String, dynamic> toJson() {
     return {
@@ -24,7 +35,6 @@ class Product {
     };
   }
 
-  /// Convertir JSON a objeto
   /// Convertir JSON a objeto
   factory Product.fromJson(Map<String, dynamic> json) => Product(
         // Protegemos los textos por si llegan nulos

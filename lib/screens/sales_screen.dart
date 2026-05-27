@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:ejemploia/services/firestore_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -160,6 +161,70 @@ class _SalesScreenState extends State<SalesScreen> {
     );
   }
 
+Future<void> _updateProductPrice(BuildContext context, dynamic item) async {
+  final TextEditingController priceController = 
+      TextEditingController(text: item.product.price.toString());
+
+  return showDialog<void>(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Text('Editar precio de ${item.product.name}'),
+        content: TextField(
+          controller: priceController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Nuevo Precio',
+            prefixText: '\$ ',
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            child: const Text('Cancelar'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          ElevatedButton(
+            child: const Text('Guardar'),
+            onPressed: () async {
+              double? newPrice = double.tryParse(priceController.text);
+
+              if (newPrice != null && newPrice >= 0) {
+                try {
+                  // 1. ACTUALIZAR EN TU COLECCIÓN REAL: 'products'
+                  await FirebaseFirestore.instance
+                      .collection('products') // 🟢 Corregido según tu imagen
+                      .doc(item.product.id.toString().trim()) // Aseguramos que el ID vaya limpio como String (ej: "1")   
+                      .update({
+                        'price': newPrice, // Mapea directo al campo price de tu Firebase
+                      });
+
+                  // 2. ACTUALIZAR LOCALMENTE EN LA PANTALLA
+                  setState(() {
+                    item.product.price = newPrice;
+                  });
+
+                  Navigator.of(context).pop();
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Precio de ${item.product.name} actualizado en Firebase')),
+                  );
+                } catch (e) {
+                  // Esto te imprimirá en la consola de tu computadora el motivo exacto si vuelve a fallar
+                  print("ERROR DETECTADO AL ACTUALIZAR: $e");
+                  
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error al guardar: $e')),
+                  );
+                }
+              }
+            },
+          ),
+        ],
+      );
+    },
+  );
+}
+
   @override
   Widget build(BuildContext context) {
     final currency = NumberFormat.simpleCurrency(locale: 'es_MX');
@@ -273,7 +338,19 @@ class _SalesScreenState extends State<SalesScreen> {
                       final item = cart[i];
 
                       return ListTile(
-                        title: Text(item.product.name),
+                        // AGREGADO: Al picar el nombre del producto, se abre el editor
+                        title: InkWell(
+                          onTap: () => _updateProductPrice(context, item),
+                          child: Text(
+                            item.product.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              decoration: TextDecoration
+                                  .underline, // Opcional: una línea abajo sutil para notar que es clicable
+                              decorationStyle: TextDecorationStyle.dashed,
+                            ),
+                          ),
+                        ),
                         subtitle: Text(
                           '${currency.format(item.product.price)} x ${item.quantity}',
                         ),
@@ -459,7 +536,8 @@ class _SalesScreenState extends State<SalesScreen> {
                                 });
 
                                 final sale = Sale(
-                                  id: DateTime.now().millisecondsSinceEpoch.toString(),
+                                  id: DateTime.now().millisecondsSinceEpoch
+                                      .toString(),
                                   items: List.from(cart),
                                   date: DateTime.now(),
                                   isPaid: true,
@@ -479,7 +557,7 @@ class _SalesScreenState extends State<SalesScreen> {
                                   cart.clear();
                                   selectedCustomer = null;
                                   // 🔥 3. QUITAMOS EL CANDADO
-                                  _isProcessing = false; 
+                                  _isProcessing = false;
                                 });
 
                                 widget.onUpdate();
@@ -489,8 +567,15 @@ class _SalesScreenState extends State<SalesScreen> {
                           foregroundColor: Colors.white,
                         ),
                         // 🔥 4. EFECTO VISUAL: Si está procesando, muestra la bolita dando vueltas
-                        child: _isProcessing 
-                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        child: _isProcessing
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
                             : const Text('COBRAR'),
                       ),
                     ),
@@ -511,7 +596,8 @@ class _SalesScreenState extends State<SalesScreen> {
                                   });
 
                                   final sale = Sale(
-                                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                                    id: DateTime.now().millisecondsSinceEpoch
+                                        .toString(),
                                     items: List.from(cart),
                                     date: DateTime.now(),
                                     isPaid: false, // Es deuda
@@ -524,7 +610,9 @@ class _SalesScreenState extends State<SalesScreen> {
 
                                   // Actualizar adeudo
                                   selectedCustomer!.balance += total;
-                                  await _firestoreService.updateCustomer(selectedCustomer!);
+                                  await _firestoreService.updateCustomer(
+                                    selectedCustomer!,
+                                  );
 
                                   // Protección para la pantalla
                                   if (!mounted) return;
@@ -538,7 +626,7 @@ class _SalesScreenState extends State<SalesScreen> {
                                     cart.clear();
                                     selectedCustomer = null;
                                     // 🔥 3. QUITAMOS EL CANDADO
-                                    _isProcessing = false; 
+                                    _isProcessing = false;
                                   });
 
                                   widget.onUpdate();
@@ -548,8 +636,15 @@ class _SalesScreenState extends State<SalesScreen> {
                             foregroundColor: Colors.white,
                           ),
                           // 🔥 4. EFECTO VISUAL AQUÍ TAMBIÉN
-                          child: _isProcessing 
-                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          child: _isProcessing
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
                               : const Text('FIAR'),
                         ),
                       ),

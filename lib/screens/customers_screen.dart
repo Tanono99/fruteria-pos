@@ -55,32 +55,75 @@ class _CustomersScreenState extends State<CustomersScreen> {
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
+              // 1. Agregamos async aquí para usar Firebase
               if (name.text.trim().isEmpty) return;
 
-              if (c == null) {
-                AppState.customers.add(
-                  Customer(
-                    id: DateTime.now().toString(),
-                    name: name.text,
-                    phone: phone.text,
+              // Mostramos un indicador de carga para que el usuario espere la subida
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) =>
+                    const Center(child: CircularProgressIndicator()),
+              );
+
+              try {
+                if (c == null) {
+                  // --- NUEVO CLIENTE (Subir directo a Firebase) ---
+
+                  // Creamos una referencia para obtener un ID automático de Firebase
+                  final docRef = FirebaseFirestore.instance
+                      .collection('customers')
+                      .doc();
+
+                  await docRef.set({
+                    'id': docRef.id, // Guardamos el ID autogenerado
+                    'name': name.text.trim(),
+                    'phone': phone.text.trim(),
+                    'balance': 0.0, // ¡Clave para tus adeudos! Inicializa en 0
+                  });
+                } else {
+                  // --- EDITAR CLIENTE (Actualizar en Firebase) ---
+                  await FirebaseFirestore.instance
+                      .collection('customers')
+                      .doc(
+                        c.id,
+                      ) // Usamos el id del cliente que estamos editando
+                      .update({
+                        'name': name.text.trim(),
+                        'phone': phone.text.trim(),
+                      });
+                }
+
+                // Cerramos el indicador de carga
+                Navigator.pop(context);
+
+                // Cerramos el diálogo del formulario
+                Navigator.pop(context);
+
+                // Notificamos a la pantalla principal que se actualicen los datos
+                widget.onUpdate();
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      c == null
+                          ? 'Cliente agregado a Firebase'
+                          : 'Cliente actualizado en Firebase',
+                    ),
                   ),
                 );
-              } else {
-                c.name = name.text;
-                c.phone = phone.text;
+              } catch (e) {
+                Navigator.pop(
+                  context,
+                ); // Cerramos el indicador de carga si hay error
+                print("Error al guardar en Firebase: $e");
+
+                // Avisamos en pantalla si algo falló (por ejemplo, falta de internet)
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text('Error al guardar: $e')));
               }
-
-              widget.onUpdate();
-              Navigator.pop(context);
-
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    c == null ? 'Cliente agregado' : 'Cliente actualizado',
-                  ),
-                ),
-              );
             },
             child: const Text('Guardar'),
           ),

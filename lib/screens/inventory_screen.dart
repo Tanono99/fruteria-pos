@@ -41,13 +41,16 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     Expanded(
                       child: TextField(
                         controller: id,
-                        decoration:
-                            const InputDecoration(labelText: 'Código / SKU'),
+                        decoration: const InputDecoration(
+                          labelText: 'Código / SKU',
+                        ),
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.qr_code_scanner,
-                          color: Colors.orange),
+                      icon: const Icon(
+                        Icons.qr_code_scanner,
+                        color: Colors.orange,
+                      ),
                       onPressed: () async {
                         await Navigator.push(
                           context,
@@ -62,22 +65,23 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           ),
                         );
                       },
-                    )
+                    ),
                   ],
                 ),
-                const SizedBox(height: 20,),
+                const SizedBox(height: 20),
                 TextField(
                   controller: name,
                   decoration: const InputDecoration(
-                      labelText: 'Nombre del Producto'),
+                    labelText: 'Nombre del Producto',
+                  ),
                 ),
-                const SizedBox(height: 20,),
+                const SizedBox(height: 20),
                 TextField(
                   controller: price,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration:
-                      const InputDecoration(labelText: 'Precio \$'),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(labelText: 'Precio \$'),
                 ),
 
                 SwitchListTile(
@@ -90,8 +94,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancelar')),
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
 
             ElevatedButton(
               onPressed: () {
@@ -114,10 +119,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     .isNotEmpty;
 
                 final existingName = AppState.inventory
-                    .where((x) =>
-                        x.name.toLowerCase() ==
-                            newName.toLowerCase() &&
-                        x != p)
+                    .where(
+                      (x) =>
+                          x.name.toLowerCase() == newName.toLowerCase() &&
+                          x != p,
+                    )
                     .isNotEmpty;
 
                 if (existingId) {
@@ -161,7 +167,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 Navigator.pop(context);
               },
               child: const Text('Guardar'),
-            )
+            ),
           ],
         ),
       ),
@@ -177,32 +183,48 @@ class _InventoryScreenState extends State<InventoryScreen> {
         content: Text('¿Eliminar "${p.name}"?'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+
           ElevatedButton(
-            onPressed: () async{
-              await FirebaseFirestore.instance
-              .collection('products')
-              .doc(p.id)
-              .delete();
-              
-              setState(() {
-                AppState.inventory.removeWhere((x) => x.id == p.id);
-              });
-
-              widget.onUpdate();
-              Navigator.pop(context);
-
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Producto eliminado'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+
+            onPressed: () async {
+              try {
+                // 🔥 1. ELIMINAR EN FIREBASE (FUENTE REAL)
+                await FirebaseFirestore.instance
+                    .collection('products')
+                    .doc(p.id)
+                    .delete();
+
+                // 🔥 2. ACTUALIZAR UI (SIN TOCAR LA LISTA MANUALMENTE)
+                widget.onUpdate();
+
+                // 🔥 3. CERRAR DIALOG
+                Navigator.pop(context);
+
+                // 🔥 4. MENSAJE
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Producto eliminado'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              } catch (e) {
+                Navigator.pop(context);
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error al eliminar: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+
             child: const Text('Eliminar'),
-          )
+          ),
         ],
       ),
     );
@@ -210,19 +232,30 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
   // 🔹 Buscar por Escáner
   void _scanBarcode() async {
-    await Navigator.push(context, MaterialPageRoute(builder: (ctx) => BarcodeScannerWidget(onDetect: (code) {
-      final p = AppState.inventory.where((x) => x.id == code).firstOrNull;
-      if (p != null) {
-        _editProduct(p);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Producto $code no encontrado')));
-      }
-    })));
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (ctx) => BarcodeScannerWidget(
+          onDetect: (code) {
+            final p = AppState.inventory.where((x) => x.id == code).firstOrNull;
+            if (p != null) {
+              _editProduct(p);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Producto $code no encontrado')),
+              );
+            }
+          },
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    AppState.inventory.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    AppState.inventory.sort(
+      (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+    );
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -231,7 +264,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
             color: Colors.white,
             fontSize: 24,
             fontWeight: FontWeight.bold,
-            letterSpacing: 2
+            letterSpacing: 2,
           ),
         ),
         flexibleSpace: Container(
@@ -248,56 +281,84 @@ class _InventoryScreenState extends State<InventoryScreen> {
           // 🟢 BUSCADOR REUTILIZADO DE VENTAS (Autocomplete + Escáner)
           Padding(
             padding: const EdgeInsets.all(16),
-            child: Row(children: [
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 15),
-                  decoration: BoxDecoration(
-                    color: Colors.white, 
-                    borderRadius: BorderRadius.circular(15), 
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]
-                  ),
-                  child: Autocomplete<Product>(
-                    displayStringForOption: (p) => p.name,
-                    optionsBuilder: (TextEditingValue textEditingValue) {
-                      if (textEditingValue.text == '') return const Iterable<Product>.empty();
-                      return AppState.inventory.where((Product option) {
-                        return option.name.toLowerCase().contains(textEditingValue.text.toLowerCase()) ||
-                               option.id.toLowerCase().contains(textEditingValue.text.toLowerCase());
-                      });
-                    },
-                    onSelected: (Product selection) {
-                      _editProduct(selection); // Abre la edición directamente
-                      FocusScope.of(context).unfocus();
-                    },
-                    fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
-                      return TextField(
-                        controller: textController,
-                        focusNode: focusNode,
-                        decoration: InputDecoration(
-                          hintText: 'Buscar producto...', 
-                          border: InputBorder.none, 
-                          icon: const Icon(Icons.search, color: Colors.orange),
-                          suffixIcon: IconButton(
-                            icon: const Icon(Icons.clear, color: Colors.grey, size: 20),
-                            onPressed: () {
-                              textController.clear();
-                              focusNode.unfocus();
-                            },
-                          ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 15),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(15),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
                         ),
-                      );
-                    },
+                      ],
+                    ),
+                    child: Autocomplete<Product>(
+                      displayStringForOption: (p) => p.name,
+                      optionsBuilder: (TextEditingValue textEditingValue) {
+                        if (textEditingValue.text == '')
+                          return const Iterable<Product>.empty();
+                        return AppState.inventory.where((Product option) {
+                          return option.name.toLowerCase().contains(
+                                textEditingValue.text.toLowerCase(),
+                              ) ||
+                              option.id.toLowerCase().contains(
+                                textEditingValue.text.toLowerCase(),
+                              );
+                        });
+                      },
+                      onSelected: (Product selection) {
+                        _editProduct(selection); // Abre la edición directamente
+                        FocusScope.of(context).unfocus();
+                      },
+                      fieldViewBuilder:
+                          (
+                            context,
+                            textController,
+                            focusNode,
+                            onFieldSubmitted,
+                          ) {
+                            return TextField(
+                              controller: textController,
+                              focusNode: focusNode,
+                              decoration: InputDecoration(
+                                hintText: 'Buscar producto...',
+                                border: InputBorder.none,
+                                icon: const Icon(
+                                  Icons.search,
+                                  color: Colors.orange,
+                                ),
+                                suffixIcon: IconButton(
+                                  icon: const Icon(
+                                    Icons.clear,
+                                    color: Colors.grey,
+                                    size: 20,
+                                  ),
+                                  onPressed: () {
+                                    textController.clear();
+                                    focusNode.unfocus();
+                                  },
+                                ),
+                              ),
+                            );
+                          },
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              IconButton.filled(
-                onPressed: _scanBarcode, 
-                icon: const Icon(Icons.qr_code_scanner), 
-                style: IconButton.styleFrom(backgroundColor: Colors.orange, padding: const EdgeInsets.all(15))
-              ),
-            ]),
+                const SizedBox(width: 10),
+                IconButton.filled(
+                  onPressed: _scanBarcode,
+                  icon: const Icon(Icons.qr_code_scanner),
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    padding: const EdgeInsets.all(15),
+                  ),
+                ),
+              ],
+            ),
           ),
 
           // 🟢 LISTA COMPLETA DE INVENTARIO ABAJO
@@ -310,7 +371,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     ),
                   )
                 : ListView.builder(
-                    padding: const EdgeInsets.only(left: 10, right: 10, bottom: 80),
+                    padding: const EdgeInsets.only(
+                      left: 10,
+                      right: 10,
+                      bottom: 80,
+                    ),
                     itemCount: AppState.inventory.length,
                     itemBuilder: (ctx, i) {
                       final p = AppState.inventory[i];
@@ -327,21 +392,32 @@ class _InventoryScreenState extends State<InventoryScreen> {
                               ),
                             ),
                           ),
-                          title: Text(p.name,
-                              style: const TextStyle(fontWeight: FontWeight.bold)),
+
+                          title: Text(
+                            p.name,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+
                           subtitle: Text(
-                              '\$${p.price.toStringAsFixed(2)} ${p.isByWeight ? "/ kg" : "/ pz"}'),
+                            '\$${p.price.toStringAsFixed(2)} ${p.isByWeight ? "/ kg" : "/ pz"}',
+                          ),
 
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               IconButton(
-                                icon: const Icon(Icons.edit, color: Colors.blue),
+                                icon: const Icon(
+                                  Icons.edit,
+                                  color: Colors.blue,
+                                ),
                                 onPressed: () => _editProduct(p),
                               ),
+
                               IconButton(
-                                icon:
-                                    const Icon(Icons.delete_outline, color: Colors.red),
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.red,
+                                ),
                                 onPressed: () => _deleteProduct(p),
                               ),
                             ],

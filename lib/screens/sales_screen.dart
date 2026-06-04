@@ -34,8 +34,6 @@ class _SalesScreenState extends State<SalesScreen> {
 
   // 🔹 Agregar producto al carrito CORREGIDO (Separación de memoria para Mayoreo)
   void _addItem(Product p) {
-    // ❌ Quitamos el index de aquí arriba para que no se congele con datos viejos
-
     if (p.isByWeight) {
       final ctrl = TextEditingController();
 
@@ -62,34 +60,27 @@ class _SalesScreenState extends State<SalesScreen> {
                 final w = double.tryParse(ctrl.text);
                 if (w != null && w > 0) {
                   setState(() {
-                    // 🎯 BUSCAMOS EL INDEX AQUÍ ADENTRO, justo antes de operar en el carrito
                     final realIndex = cart.indexWhere(
                       (x) => x.product.id == p.id,
                     );
 
                     if (realIndex >= 0) {
-                      // 🟢 Si ya existe ese ID exacto en el carrito, le sumamos el peso
                       final itemExistente = cart[realIndex];
                       final nuevaCant = itemExistente.quantity + w;
 
                       cart[realIndex] = SaleItem(
                         product: itemExistente.product,
                         quantity: nuevaCant,
-                        total: itemExistente.product.price * nuevaCant,
                       );
                     } else {
-                      // 🟢 Si no existe, es una fruta nueva, la clonamos y la agregamos aparte
                       final productoClonado = p.copy();
-                      cart.add(
-                        SaleItem(
-                          product: productoClonado,
-                          quantity: w,
-                          total: productoClonado.price * w,
-                        ),
-                      );
+
+                      cart.add(SaleItem(product: productoClonado, quantity: w));
                     }
+
                     _searchController.clear();
                   });
+
                   Navigator.pop(context);
                 }
               },
@@ -99,7 +90,6 @@ class _SalesScreenState extends State<SalesScreen> {
         ),
       );
     } else {
-      // 🍎 Lógica para productos por PIEZA (Aquí se calcula al momento, no hay problema)
       setState(() {
         final realIndex = cart.indexWhere((x) => x.product.id == p.id);
 
@@ -110,18 +100,13 @@ class _SalesScreenState extends State<SalesScreen> {
           cart[realIndex] = SaleItem(
             product: itemExistente.product,
             quantity: nuevaCant,
-            total: itemExistente.product.price * nuevaCant,
           );
         } else {
           final productoClonado = p.copy();
-          cart.add(
-            SaleItem(
-              product: productoClonado,
-              quantity: 1,
-              total: productoClonado.price,
-            ),
-          );
+
+          cart.add(SaleItem(product: productoClonado, quantity: 1));
         }
+
         _searchController.clear();
       });
     }

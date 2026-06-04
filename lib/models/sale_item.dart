@@ -6,25 +6,25 @@ class SaleItem {
 
   SaleItem({
     required this.product,
-    required this.quantity, required total,
+    required this.quantity,
   });
 
-  /// Total por producto
+  /// Total por producto (calculado siempre)
   double get total => product.price * quantity;
 
   Map<String, dynamic> toJson() {
     return {
-      'product': product.toJson(), // 🟢 Vital: Esto guarda toda la fruta/producto
+      'product': product.toJson(),
       'quantity': quantity,
-      'total': total,              // 🟢 El campo que agregamos hoy
+      // ❌ NO guardes total (se calcula)
     };
   }
 
- factory SaleItem.fromJson(Map<String, dynamic> json) => SaleItem(
-      product: Product.fromJson(json['product'] as Map<String, dynamic>),
-      // 🟢 CONVERSIÓN SEGURA: Lee el dato sin importar si Firebase lo mandó como texto, entero o nulo.
-      quantity: double.tryParse(json['quantity'].toString()) ?? 0.0,
-      total: double.tryParse(json['total'].toString()) ?? 0.0,
-    );
+  factory SaleItem.fromJson(Map<String, dynamic> json) => SaleItem(
+        product: Product.fromJson(
+          json['product'] as Map<String, dynamic>,
+          json['product']['id'] ?? '',
+        ),
+        quantity: double.tryParse(json['quantity'].toString()) ?? 0.0,
+      );
 }
-

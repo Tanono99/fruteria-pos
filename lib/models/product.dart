@@ -36,16 +36,11 @@ class Product {
   }
 
   /// Convertir JSON a objeto
-  factory Product.fromJson(Map<String, dynamic> json) => Product(
-        // Protegemos los textos por si llegan nulos
-        id: json['id']?.toString() ?? '',
-        name: json['name']?.toString() ?? 'Sin nombre',
-        
-        // 🟢 BLINDAJE PARA LOS NÚMEROS:
-        // Convierte a texto primero y luego a decimal. Nunca va a fallar.
-        price: double.tryParse(json['price']?.toString() ?? '0') ?? 0.0,
-        stock: double.tryParse(json['stock']?.toString() ?? '0') ?? 0.0,
-        
-        isByWeight: json['isByWeight'] ?? false,
-      );
+  factory Product.fromJson(Map<String, dynamic> json, String docId) => Product(
+  id: docId, // 🔥 ID REAL DE FIREBASE
+  name: json['name']?.toString() ?? 'Sin nombre',
+  price: double.tryParse(json['price']?.toString() ?? '0') ?? 0.0,
+  stock: double.tryParse(json['stock']?.toString() ?? '0') ?? 0.0,
+  isByWeight: json['isByWeight'] ?? false,
+);
 }

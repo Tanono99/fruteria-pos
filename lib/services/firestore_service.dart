@@ -14,12 +14,15 @@ class FirestoreService {
   }
 
   Stream<List<Product>> getProductsStream() {
-    return _db.collection('products').snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) {
-        return Product.fromJson(doc.data() as Map<String, dynamic>);
-      }).toList();
-    });
-  }
+  return _db.collection('products').snapshots().map((snapshot) {
+    return snapshot.docs.map((doc) {
+      return Product.fromJson(
+        doc.data() as Map<String, dynamic>,
+        doc.id, // 🔥 ESTE ES EL QUE FALTABA
+      );
+    }).toList();
+  });
+}
 
   Future<void> deleteProduct(String id) async {
     await _db.collection('products').doc(id).delete();
